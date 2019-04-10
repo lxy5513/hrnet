@@ -115,8 +115,45 @@ def reset_config(config, args):
     if args.coco_bbox_file:
         config.TEST.COCO_BBOX_FILE = args.coco_bbox_file
 
+
 ###### Pre-process
-def PreProcess(image_path, bbox):
+def PreProcess(image_path, bboxs):
+
+    data_numpy = cv2.imread(image_path, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+
+    inputs = []
+    centers = []
+    scales = []
+    for bbox in bboxs:
+        x1,y1,x2,y2 = bbox
+        box = [x1, y1, x2-x1, y2-y1]
+
+        # 截取 box fron image  --> return center, scale
+        c, s = _box2cs(box, data_numpy.shape[0], data_numpy.shape[1])
+        centers.append(c)
+        scales.append(s)
+        r = 0
+
+        trans = get_affine_transform(c, s, r, cfg.MODEL.IMAGE_SIZE)
+        input = cv2.warpAffine(
+            data_numpy,
+            trans,
+            (int(cfg.MODEL.IMAGE_SIZE[0]), int(cfg.MODEL.IMAGE_SIZE[1])),
+            flags=cv2.INTER_LINEAR)
+
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                std=[0.229, 0.224, 0.225]),
+            ])
+        input = transform(input).unsqueeze(0)
+        inputs.append(input)
+
+    return inputs, data_numpy, centers, scales
+
+
+###### Pre-process
+def PreProcessx(image_path, bbox):
     try:
         x1,y1,x2,y2 = bbox
     except:
@@ -179,7 +216,7 @@ def main():
     args = parse_args()
     update_config(cfg, args)
 
-    image_path = '/home/xyliu/Pictures/pose/one_person.jpg'
+    image_path = '/home/xyliu/Pictures/pose/soccer.png'
 
     # cudnn related setting
     cudnn.benchmark = cfg.CUDNN.BENCHMARK
@@ -192,10 +229,12 @@ def main():
     human_model = yolo_model()
 
     from lib.detector.yolo.human_detector import main as yolo_det
-    bbox = yolo_det(image_path, human_model)
+    bboxs, scores = yolo_det(image_path, human_model)
 
     # bbox is coordinate location
-    inputs, origin_img, center, scale = PreProcess(image_path, bbox)
+    inputs, origin_img, center, scale = PreProcess(image_path, bboxs)
+
+    inputs = torch.cat(inputs)
 
     # load MODEL
     model = model_load(cfg)
@@ -207,7 +246,7 @@ def main():
         output = model(inputs)
         # compute coordinate
         preds, maxvals = get_final_preds(
-            cfg, output.clone().cpu().numpy(), np.asarray([center]), np.asarray([scale]))
+            cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
 
     image = plot_keypoint(origin_img, preds, maxvals, 0.1)
     cv2.imwrite('output.jpg', image)
