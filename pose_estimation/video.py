@@ -128,13 +128,18 @@ def main():
 
         x0 = ckpt_time()
         ret_val, input_image = cam.read()
-        bboxs, scores = yolo_det(input_image, human_model)
 
-        # bbox is coordinate location
-        inputs, origin_img, center, scale = PreProcess(input_image, bboxs, cfg)
+        try:
+            bboxs, scores = yolo_det(input_image, human_model)
+            # bbox is coordinate location
+            inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
+        except:
+            out.write(input_image)
+            continue
 
         with torch.no_grad():
             # compute output heatmap
+            inputs = inputs[:,[2,1,0]]
             output = pose_model(inputs.cuda())
             # compute coordinate
             preds, maxvals = get_final_preds(

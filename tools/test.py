@@ -8,6 +8,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+import ipdb;pdb=ipdb.set_trace
 
 import argparse
 import os
@@ -30,6 +31,7 @@ from utils.utils import create_logger
 
 import dataset
 import models
+import ipdb;pdb=ipdb.set_trace
 
 
 def parse_args():
@@ -37,7 +39,7 @@ def parse_args():
     # general
     parser.add_argument('--cfg',
                         help='experiment configure file name',
-                        required=True,
+                        default='experiments/coco/hrnet/w32_256x192_adam_lr1e-3.yaml',
                         type=str)
 
     parser.add_argument('opts',
@@ -113,9 +115,10 @@ def main():
         cfg, is_train=False
     )
 
-    if cfg.TEST.MODEL_FILE:
+    if not cfg.TEST.MODEL_FILE:
         logger.info('=> loading model from {}'.format(cfg.TEST.MODEL_FILE))
-        model.load_state_dict(torch.load(cfg.TEST.MODEL_FILE), strict=False)
+        model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_256x192.pth' 
+        model.load_state_dict(torch.load(model_file_name), strict=False)
     else:
         model_state_file = os.path.join(
             final_output_dir, 'final_state.pth'

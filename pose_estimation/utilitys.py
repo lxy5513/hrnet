@@ -26,7 +26,7 @@ def plot_keypoint(image, coordinates, confidence, keypoint_thresh):
                 pt0 = pts[jp, 0];pt1 = pts[jp, 1]
                 pt0_0, pt0_1, pt1_0, pt1_1 = int(pt0[0]), int(pt0[1]), int(pt1[0]), int(pt1[1])
 
-                cv2.line(image, (pt0_0, pt1_0), (pt0_1, pt1_1), color_i, 2)
+                cv2.line(image, (pt0_0, pt1_0), (pt0_1, pt1_1), color_i, 4)
                 #  cv2.circle(image,(pt0_0, pt0_1), 2, color_i, thickness=-1)
                 #  cv2.circle(image,(pt1_0, pt1_1), 2, color_i, thickness=-1)
     return image
@@ -96,7 +96,7 @@ def _xywh2cs(x, y, w, h, image_width, image_height):
     return center, scale
 
 ###### Pre-process
-def PreProcess(image, bboxs, cfg):
+def PreProcess(image, bboxs, scores, cfg, thred_score=0.8):
 
     if type(image) == str:
         data_numpy = cv2.imread(image, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
@@ -106,7 +106,10 @@ def PreProcess(image, bboxs, cfg):
     inputs = []
     centers = []
     scales = []
-    for bbox in bboxs:
+
+    score_num = np.sum(scores>thred_score)
+    max_box = min(5, score_num)
+    for bbox in bboxs[:max_box]:
         x1,y1,x2,y2 = bbox
         box = [x1, y1, x2-x1, y2-y1]
 

@@ -11,7 +11,7 @@ import pprint
 import ipdb;pdb=ipdb.set_trace
 import numpy as np
 from tqdm import tqdm
-from utilitys import plot_keypoint
+from utilitys import plot_keypoint, PreProcess
 
 import torch
 import torch.nn.parallel
@@ -67,34 +67,12 @@ def parse_args():
                         help='prev Model directory',
                         type=str,
                         default='')
-
+    parser.add_argument("-i", "--img_input", help="input video file name", default='/home/xyliu/Pictures/pose/soccer.png')
+    parser.add_argument("-o", "--img_output", help="output video file name", default="output/result.png")
     args = parser.parse_args()
+
     return args
 
-
-def _box2cs(box, image_width, image_height):
-    x, y, w, h = box[:4]
-    return _xywh2cs(x, y, w, h, image_width, image_height)
-
-def _xywh2cs(x, y, w, h, image_width, image_height):
-    center = np.zeros((2), dtype=np.float32)
-    center[0] = x + w * 0.5
-    center[1] = y + h * 0.5
-
-    aspect_ratio = image_width * 1.0 / image_height
-    pixel_std = 200
-
-    if w > aspect_ratio * h:
-        h = w * 1.0 / aspect_ratio
-    elif w < aspect_ratio * h:
-        w = h * aspect_ratio
-    scale = np.array(
-        [w * 1.0 / pixel_std, h * 1.0 / pixel_std],
-        dtype=np.float32)
-    if center[0] != -1:
-        scale = scale * 1.25
-
-    return center, scale
 
 def reset_config(config, args):
     if args.gpus:
@@ -116,76 +94,6 @@ def reset_config(config, args):
         config.TEST.COCO_BBOX_FILE = args.coco_bbox_file
 
 
-###### Pre-process
-def PreProcess(image_path, bboxs):
-
-    data_numpy = cv2.imread(image_path, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
-
-    inputs = []
-    centers = []
-    scales = []
-    for bbox in bboxs:
-        x1,y1,x2,y2 = bbox
-        box = [x1, y1, x2-x1, y2-y1]
-
-        # 截取 box fron image  --> return center, scale
-        c, s = _box2cs(box, data_numpy.shape[0], data_numpy.shape[1])
-        centers.append(c)
-        scales.append(s)
-        r = 0
-
-        trans = get_affine_transform(c, s, r, cfg.MODEL.IMAGE_SIZE)
-        input = cv2.warpAffine(
-            data_numpy,
-            trans,
-            (int(cfg.MODEL.IMAGE_SIZE[0]), int(cfg.MODEL.IMAGE_SIZE[1])),
-            flags=cv2.INTER_LINEAR)
-
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                std=[0.229, 0.224, 0.225]),
-            ])
-        input = transform(input).unsqueeze(0)
-        inputs.append(input)
-
-    return inputs, data_numpy, centers, scales
-
-
-###### Pre-process
-def PreProcessx(image_path, bbox):
-    try:
-        x1,y1,x2,y2 = bbox
-    except:
-        x1,y1,x2,y2 = eval(bbox)
-    box = [x1, y1, x2-x1, y2-y1]
-
-    data_numpy = cv2.imread(image_path, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
-    # data_numpy = cv2.resize(data_numpy, (512, 512))
-    if data_numpy is None:
-        logger.error('=> fail to read {}'.format(image_file))
-        raise ValueError('Fail to read {}'.format(image_file))
-
-    # 截取 box fron image  --> return center, scale
-    c, s = _box2cs(box, data_numpy.shape[0], data_numpy.shape[1])
-    r = 0
-
-    trans = get_affine_transform(c, s, r, cfg.MODEL.IMAGE_SIZE)
-    input = cv2.warpAffine(
-        data_numpy,
-        trans,
-        (int(cfg.MODEL.IMAGE_SIZE[0]), int(cfg.MODEL.IMAGE_SIZE[1])),
-        flags=cv2.INTER_LINEAR)
-
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                            std=[0.229, 0.224, 0.225]),
-        ])
-    input = transform(input).unsqueeze(0)
-    return input, data_numpy, c, s
-
-
 
 ##### load model
 def model_load(config):
@@ -198,26 +106,17 @@ def model_load(config):
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
         name = k # remove module.
-        print(name,'\t')
+        #  print(name,'\t')
         new_state_dict[name] = v
-    #  import ipdb;ipdb.set_trace()
     model.load_state_dict(new_state_dict)
+    model.eval()
     return model
 
-def get_data(path, item=0):
-    import json
-    data = json.load(open(path, 'rt'))
-    image_path = data[item]['name']
-    bbox = data[item]['bbox']
-    return image_path, bbox
 
 
 def main():
     args = parse_args()
     update_config(cfg, args)
-
-    image_path = '/home/xyliu/Pictures/pose/soccer.png'
-
     # cudnn related setting
     cudnn.benchmark = cfg.CUDNN.BENCHMARK
     torch.backends.cudnn.deterministic = cfg.CUDNN.DETERMINISTIC
@@ -229,27 +128,25 @@ def main():
     human_model = yolo_model()
 
     from lib.detector.yolo.human_detector import main as yolo_det
-    bboxs, scores = yolo_det(image_path, human_model)
+    bboxs, scores = yolo_det(args.img_input, human_model)
 
     # bbox is coordinate location
-    inputs, origin_img, center, scale = PreProcess(image_path, bboxs)
-
-    inputs = torch.cat(inputs)
+    inputs, origin_img, center, scale = PreProcess(args.img_input, bboxs, scores, cfg)
 
     # load MODEL
     model = model_load(cfg)
 
-    model.eval()
-
     with torch.no_grad():
         # compute output heatmap
+        pdb()
+        inputs = inputs[:,[2,1,0]]
         output = model(inputs)
         # compute coordinate
         preds, maxvals = get_final_preds(
             cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
 
-    image = plot_keypoint(origin_img, preds, maxvals, 0.1)
-    cv2.imwrite('output.jpg', image)
+    image = plot_keypoint(origin_img, preds, maxvals, 0.3)
+    cv2.imwrite(args.img_output, image)
 
 if __name__ == '__main__':
     main()
