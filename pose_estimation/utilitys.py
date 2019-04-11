@@ -26,7 +26,7 @@ def plot_keypoint(image, coordinates, confidence, keypoint_thresh):
                 pt0 = pts[jp, 0];pt1 = pts[jp, 1]
                 pt0_0, pt0_1, pt1_0, pt1_1 = int(pt0[0]), int(pt0[1]), int(pt1[0]), int(pt1[1])
 
-                cv2.line(image, (pt0_0, pt1_0), (pt0_1, pt1_1), color_i, 4)
+                cv2.line(image, (pt0_0, pt1_0), (pt0_1, pt1_1), color_i, 6)
                 #  cv2.circle(image,(pt0_0, pt0_1), 2, color_i, thickness=-1)
                 #  cv2.circle(image,(pt1_0, pt1_1), 2, color_i, thickness=-1)
     return image

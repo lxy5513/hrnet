@@ -42,7 +42,9 @@ def parse_args():
     # general
     parser.add_argument('--cfg',
                         help='experiment configure file name',
-                        default='experiments/coco/hrnet/w32_256x192_adam_lr1e-3.yaml',
+                        #  default='experiments/coco/hrnet/w32_256x192_adam_lr1e-3.yaml',
+                        default='experiments/coco/hrnet/w48_256x192_adam_lr1e-3.yaml',
+                        #  default='experiments/coco/hrnet/w32_384x288_adam_lr1e-3.yaml',
                         type=str)
 
     parser.add_argument('opts',
@@ -97,10 +99,14 @@ def reset_config(config, args):
 
 ##### load model
 def model_load(config):
+    pdb()
+    # lib/models/pose_hrnet.py:get_pose_net
     model = eval('models.'+config.MODEL.NAME+'.get_pose_net')(
         config, is_train=False
     )
-    model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_256x192.pth'
+    #  model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_256x192.pth'
+    model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w48_256x192.pth'
+    #  model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_384x288.pth'
     state_dict = torch.load(model_file_name)
     from collections import OrderedDict
     new_state_dict = OrderedDict()
@@ -138,7 +144,6 @@ def main():
 
     with torch.no_grad():
         # compute output heatmap
-        pdb()
         inputs = inputs[:,[2,1,0]]
         output = model(inputs)
         # compute coordinate
