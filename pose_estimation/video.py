@@ -135,21 +135,23 @@ def main():
         ret_val, input_image = cam.read()
 
 
-        #  if item == 0:
-            #  item = 1
-            #  continue
+        if args.camera:
+            # 为取得实时速度，每两帧取一整预测
+            if item == 0:
+                item = 1
+                continue
 
-        #  item = 0
+        item = 0
         try:
             bboxs, scores = yolo_det(input_image, human_model)
             # bbox is coordinate location
             inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
         except:
-            #  out.write(input_image)
+            out.write(input_image)
             cv2.namedWindow("enhanced",0);
             cv2.resizeWindow("enhanced", 1920, 1080);
             cv2.imshow('enhanced', input_image)
-            cv2.waitKey(4)
+            cv2.waitKey(2)
             continue
 
         with torch.no_grad():
