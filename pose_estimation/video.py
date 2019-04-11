@@ -34,6 +34,8 @@ def parse_args():
     parser.add_argument('--cfg',
                         help='experiment configure file name',
                         default='experiments/coco/hrnet/w32_256x192_adam_lr1e-3.yaml',
+                        #  default='experiments/coco/hrnet/w48_256x192_adam_lr1e-3.yaml',
+                        #  default='experiments/coco/hrnet/w32_384x288_adam_lr1e-3.yaml',
                         type=str)
 
     parser.add_argument('opts',
@@ -76,6 +78,8 @@ def model_load(config):
         config, is_train=False
     )
     model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_256x192.pth'
+    #  model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w48_256x192.pth'
+    #  model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_384x288.pth'
     state_dict = torch.load(model_file_name)
     from collections import OrderedDict
     new_state_dict = OrderedDict()
@@ -111,7 +115,7 @@ def main():
         video_length = int(cam.get(cv2.CAP_PROP_FRAME_COUNT))
     else:
         cam = cv2.VideoCapture(0)
-        video_length = 3000
+        video_length = 30000
 
     ret_val, input_image = cam.read()
     # Video writer
@@ -124,17 +128,28 @@ def main():
     pose_model = model_load(cfg)
     pose_model.cuda()
 
+    item = 0
     for i in tqdm(range(video_length-1)):
 
         x0 = ckpt_time()
         ret_val, input_image = cam.read()
 
+
+        #  if item == 0:
+            #  item = 1
+            #  continue
+
+        #  item = 0
         try:
             bboxs, scores = yolo_det(input_image, human_model)
             # bbox is coordinate location
             inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
         except:
-            out.write(input_image)
+            #  out.write(input_image)
+            cv2.namedWindow("enhanced",0);
+            cv2.resizeWindow("enhanced", 1920, 1080);
+            cv2.imshow('enhanced', input_image)
+            cv2.waitKey(4)
             continue
 
         with torch.no_grad():
@@ -149,7 +164,16 @@ def main():
         out.write(image)
 
         if args.display:
-            cv2.imshow('image', image)
+            ######### 全屏
+            #  out_win = "output_style_full_screen"
+            #  cv2.namedWindow(out_win, cv2.WINDOW_NORMAL)
+            #  cv2.setWindowProperty(out_win, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            #  cv2.imshow(out_win, image)
+
+            ########### 指定屏幕大小
+            cv2.namedWindow("enhanced", cv2.WINDOW_GUI_NORMAL);
+            cv2.resizeWindow("enhanced", 1920, 1080);
+            cv2.imshow('enhanced', image)
             cv2.waitKey(1)
 
 if __name__ == '__main__':
