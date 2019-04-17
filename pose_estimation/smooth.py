@@ -27,6 +27,8 @@ import cv2
 import models
 from lib.detector.yolo.human_detector import main as yolo_det
 
+from flow_utils import *
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train keypoints network')
@@ -103,6 +105,7 @@ def ckpt_time(t0=None, display=None):
 
 ###### 加载human detecotor model
 from lib.detector.yolo.human_detector import load_model as yolo_model
+sys.path.remove('/home/xyliu/2D_pose/deep-high-resolution-net.pytorch/flow_net')
 human_model = yolo_model()
 
 def main():
@@ -118,34 +121,53 @@ def main():
         video_length = 30000
 
     ret_val, input_image = cam.read()
+    resize_W = 384
+    resize_H = 640
+    input_image = cv2.resize(input_image, (resize_W, resize_H))
     # Video writer
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     input_fps = cam.get(cv2.CAP_PROP_FPS)
     out = cv2.VideoWriter(args.video_output,fourcc, input_fps, (input_image.shape[1],input_image.shape[0]))
 
+    #### load optical flow model
+    flow_model = load_model()
 
     #### load pose-hrnet MODEL
     pose_model = model_load(cfg)
     pose_model.cuda()
+
+    first_frame = 1
+
+    flow_boxs = 0
+    flow_kpts = 0
 
     item = 0
     for i in tqdm(range(video_length-1)):
 
         x0 = ckpt_time()
         ret_val, input_image = cam.read()
+        input_image = cv2.resize(input_image, (resize_W, resize_H))
 
-
-        if args.camera:
-            # 为取得实时速度，每两帧取一帧预测
-            if item == 0:
-                item = 1
+        if first_frame == 0:
+            try:
+                flow_result = flow_net(pre_image, input_image, flow_model)
+                flow_boxs, flow_kpts = flow_propagation(keypoints, flow_result)
+            except Exception as e:
+                print(e)
                 continue
 
-        item = 0
+        pre_image = input_image
+        first_frame = 0
+
+
         try:
             bboxs, scores = yolo_det(input_image, human_model)
             # bbox is coordinate location
-            inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
+            if type(flow_boxs) == int:
+                inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
+            else:
+                flow_boxs = (flow_boxs + bboxs) /2
+                inputs, origin_img, center, scale = PreProcess(input_image, flow_boxs, scores, cfg)
         except:
             out.write(input_image)
             cv2.namedWindow("enhanced",0);
@@ -162,16 +184,15 @@ def main():
             preds, maxvals = get_final_preds(
                 cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
 
+        #  if type(flow_boxs) != int:
+            #  preds = (preds + flow_kpts) / 2
+
         image = plot_keypoint(origin_img, preds, maxvals, 0.1)
         out.write(image)
+        keypoints = np.concatenate((preds, maxvals), 2)
+
 
         if args.display:
-            ######### 全屏
-            #  out_win = "output_style_full_screen"
-            #  cv2.namedWindow(out_win, cv2.WINDOW_NORMAL)
-            #  cv2.setWindowProperty(out_win, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-            #  cv2.imshow(out_win, image)
-
             ########### 指定屏幕大小
             cv2.namedWindow("enhanced", cv2.WINDOW_GUI_NORMAL);
             cv2.resizeWindow("enhanced", 1920, 1080);
