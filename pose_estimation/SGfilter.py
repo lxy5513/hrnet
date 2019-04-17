@@ -74,23 +74,24 @@ def parse_args():
 kpt_queue = []
 from scipy.signal import savgol_filter
 def smooth_filter(kpts):
-    if len(kpt_queue) < 14:
+    if len(kpt_queue) < 6:
         kpt_queue.append(kpts)
         return kpts
 
-    if len(kpt_queue) == 50:
+    queue_length = len(kpt_queue)
+    if queue_length == 50:
         kpt_queue.pop(0)
-
     kpt_queue.append(kpts)
 
     # transpose to shape (17, 2, num, 50) 关节点、横纵坐标、每帧人数、帧数
     transKpts = np.array(kpt_queue).transpose(1,2,3,0)
 
+    window_length = queue_length - 1 if queue_length % 2 == 0 else queue_length - 2
     # array, window_length越大越好, polyorder 
-    result = savgol_filter(transKpts, 13, 3).transpose(3, 0, 1, 2) #shape(frame_num, human_num, 17, 2)
+    result = savgol_filter(transKpts, window_length, 3).transpose(3, 0, 1, 2) #shape(frame_num, human_num, 17, 2)
 
     # 返回倒数第几帧
-    return result[-2]
+    return result[-3]
 
 
 
