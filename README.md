@@ -18,16 +18,16 @@ python pose_estimation/SGfilter.py
 ```  
 
 [todo] 
-使用flownet2来实现视频姿态track
+  使用flownet2来实现视频姿态track
 
-添加R-FCN、SSD  
+  添加R-FCN、SSD  
 
-do RP and speed description
+  do RP and speed description
 
 
 
 ---
 
 
-`original code`
+`original code`   
 clone from https://github.com/leoxiaobin/deep-high-resolution-net.pytorch 
