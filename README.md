@@ -20,6 +20,13 @@ python pose_estimation/SGfilter.py
 [todo] 
 使用flownet2来实现视频姿态track
 
+添加R-FCN、SSD  
+
+do RP and speed description
+
+
+
+---
 
 
 `original code`
