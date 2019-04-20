@@ -99,6 +99,12 @@ def ckpt_time(t0=None, display=None):
             print('consume {:2f} second'.format(t1-t0))
         return t1-t0, t1
 
+def filter_small_boxes(boxes, min_size):
+    assert boxes.shape[1] == 4, 'Func doesnot support tubes yet'
+    w = boxes[:, 2] - boxes[:, 0]
+    h = boxes[:, 3] - boxes[:, 1]
+    keep = np.where((w >= min_size) & (h > min_size))[0]
+    return keep
 
 ###### 加载human detecotor model
 from lib.detector.yolo.human_detector import load_model as yolo_model
@@ -126,12 +132,12 @@ def main():
 
     #### load pose-hrnet MODEL
     pose_model = model_load(cfg)
-    #  pose_model = torch.nn.DataParallel(pose_model, device_ids=[0,1]).cuda()
     pose_model.cuda()
 
     item = 0
     prev_max = 0
     for i in tqdm(range(video_length-1)):
+        pdb()
 
         x0 = ckpt_time()
         ret_val, input_image = cam.read()
@@ -150,15 +156,20 @@ def main():
             cv2.waitKey(2)
             continue
 
-        with torch.no_grad():
-            # compute output heatmap
-            inputs = inputs[:,[2,1,0]]
-            output = pose_model(inputs.cuda())
-            # compute coordinate
-            preds, maxvals = get_final_preds(
-                cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
+        try:
+            with torch.no_grad():
+                # compute output heatmap
+                inputs = inputs[:,[2,1,0]]
+                output = pose_model(inputs.cuda())
+                # compute coordinate
+                preds, maxvals = get_final_preds(
+                    cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
+        except Exception as e:
+            print(e)
+            continue
 
-        from track_u import bipartite_matching_greedy, compute_pairwise_oks
+
+        from track_u import bipartite_matching_greedy, compute_pairwise_oks, boxs_similarity
         kps_b = np.concatenate((preds, maxvals), 2)
         box_b = bboxs[:preds.shape[0]]
 
@@ -166,7 +177,11 @@ def main():
             previous_ids = [j for j in range(len(preds))]
 
         if i>0:
-            similarity_matrix = compute_pairwise_oks(kps_a, box_a, kps_b)
+            pose_similarity_matrix = compute_pairwise_oks(kps_a, box_a, kps_b)
+            box_similarity_matrix = boxs_similarity(box_a, box_b)
+            # pose similarity ratio
+            ratio = 0.8
+            similarity_matrix = pose_similarity_matrix*ratio + box_similarity_matrix*(1-ratio)
             prev_ids, cur_ids = bipartite_matching_greedy(similarity_matrix)
 
             print('previous frame boxes: ',previous_ids)
@@ -181,7 +196,8 @@ def main():
 
             for j in range(cur_len):
                 if cur_maps[j] == -1.:
-                    cur_maps[j] = prev_max + 1
+                    prev_max += 1
+                    cur_maps[j] = prev_max
 
             previous_ids = cur_maps.astype(np.uint8).tolist()
             print('after map: ', previous_ids)

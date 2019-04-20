@@ -1,19 +1,38 @@
 import numpy as np
 
 
-def convert_pose_3x17(kps):
-    res = []
-    kps = np.array(kps)
-    # 从第0个开始，每隔三个取一个
-    kps_x = kps[0::3]
-    kps_y = kps[1::3]
-    kps_vis = kps[2::3]
-    # kps_vis = np.ones((17,))
-    res.append(kps_x)
-    res.append(kps_y)
-    res.append(kps_vis)
-    res = np.array(res)
-    return res
+def box_area(box):
+    # box = (x0, y0, x1, y1)
+    x0, y0, x1, y1 = box
+    # y0 > y1 or x0 > x1 会变成负数
+    area = (y1-y0) * (x1-x0)
+
+    area = max(area, 0)
+    return area
+
+def box_iou(box1, box2):
+    S1 = box_area(box1)
+    S2 = box_area(box2)
+    x0 = max(box1[0], box2[0])
+    y0 = max(box1[1], box2[1])
+    x1 = min(box1[2], box2[2])
+    y1 = min(box1[3], box2[3])
+    box_intersection = [x0, y0, x1, y1]
+    S_intesection = box_area(box_intersection)
+    return S_intesection/(S1+S2)
+
+
+def boxs_similarity(boxs1, boxs2):
+    '''
+    boxs1: (N, 4)
+    boxs2: (M, 4)
+    '''
+    matrix = np.zeros(shape=(len(boxs1), len(boxs2)))
+    for i in range(len(boxs1)):
+        for j in range(len(boxs2)):
+            box_iou_value = box_iou(boxs1[i], boxs2[j])
+            matrix[i,j] = box_iou_value
+    return matrix
 
 
 
@@ -138,6 +157,9 @@ def bipartite_matching_greedy(C):
     row_ids = np.arange(C.shape[0])
     col_ids = np.arange(C.shape[1])
 
+    if isinstance(C, list):
+        C = np.array(C)
+
     # output boxes number
     boxes_num = len(col_ids)
 
@@ -149,7 +171,7 @@ def bipartite_matching_greedy(C):
         row_id = row_ids[i]
         col_id = col_ids[j]
 
-        if C[i][j] < 0.1:
+        if C[i][j] < 0.0001:
             return prev_ids, cur_ids
 
         prev_ids.append(row_id)
