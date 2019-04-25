@@ -1,6 +1,5 @@
 '''
 使用yolov3作为pose net模型的前处理
-使用flownet2产生shift-kpts, shift-boxs,来平滑关节点.
 '''
 from __future__ import absolute_import
 from __future__ import division
@@ -24,12 +23,10 @@ from config import update_config
 from utils.transforms import *
 from lib.core.inference import get_final_preds
 import cv2
-#  import ataset
 import models
 from lib.detector.yolo.human_detector import main as yolo_det
-
-from flow_utils import *
-
+from collections import OrderedDict
+import matplotlib.pyplot as plt
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train keypoints network')
@@ -84,7 +81,6 @@ def model_load(config):
     #  model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w48_256x192.pth'
     #  model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_384x288.pth'
     state_dict = torch.load(model_file_name)
-    from collections import OrderedDict
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
         name = k # remove module.
@@ -106,111 +102,94 @@ def ckpt_time(t0=None, display=None):
 
 ###### 加载human detecotor model
 from lib.detector.yolo.human_detector import load_model as yolo_model
-sys.path.remove('/home/xyliu/2D_pose/deep-high-resolution-net.pytorch/flow_net')
 human_model = yolo_model()
 
 def main():
     args = parse_args()
     update_config(cfg, args)
 
-    if not args.camera:
-        # handle video
-        cam = cv2.VideoCapture(args.video_input)
-        video_length = int(cam.get(cv2.CAP_PROP_FRAME_COUNT))
-    else:
-        cam = cv2.VideoCapture(0)
-        video_length = 30000
-
-    ret_val, input_image = cam.read()
-    # 保持长宽都是64的倍数
-    resize_W = int(input_image.shape[1] / 64) * 64
-    resize_H = int((input_image.shape[0] / input_image.shape[1] * resize_W) / 64 ) * 64
-    print(resize_W, resize_H)
-    input_image = cv2.resize(input_image, (resize_W, resize_H))
-    # Video writer
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    input_fps = cam.get(cv2.CAP_PROP_FPS)
-    out = cv2.VideoWriter(args.video_output,fourcc, input_fps, (input_image.shape[1],input_image.shape[0]))
-
-    #### load optical flow model
-    flow_model = load_model()
-
     #### load pose-hrnet MODEL
     pose_model = model_load(cfg)
+    #  pose_model = torch.nn.DataParallel(pose_model, device_ids=[0,1]).cuda()
     pose_model.cuda()
 
-    first_frame = 1
-
-    flow_boxs = 0
-    flow_kpts = 0
-
-    item = 0
-    for i in tqdm(range(video_length-1)):
-
-        x0 = ckpt_time()
-        ret_val, input_image = cam.read()
-        input_image = cv2.resize(input_image, (resize_W, resize_H))
-
-        if first_frame == 0:
-            try:
-                t0 = ckpt_time()
-                flow_result = flow_net(pre_image, input_image, flow_model)
-                flow_boxs, flow_kpts = flow_propagation(keypoints, flow_result)
-                print('每次flownet耗时：{:0.3f}'.format(time.time()- t0))
-            except Exception as e:
-                print(e)
-                continue
-
-        pre_image = input_image
-        first_frame = 0
-
+    from pycocotools.coco import COCO
+    annFile = '/ssd/xyliu/data/coco/annotations/instances_val2017.json'
+    im_root = '/ssd/xyliu/data/coco/images/val2017/'
+    coco = COCO(annFile)
+    catIds = coco.getCatIds(catNms=['person'])
+    # 所有人体图片的id
+    imgIds = coco.getImgIds(catIds=catIds )
+    kpts_result = []
+    detected_image_num = 0
+    box_num = 0
+    for imgId in tqdm(imgIds[:]):
+        img = coco.loadImgs(imgId)[0]
+        im_name = img['file_name']
+        img = im_root + im_name
+        img_input = plt.imread(img)
 
         try:
-            bboxs, scores = yolo_det(input_image, human_model)
-            # bbox is coordinate location
+            bboxs, scores = yolo_det(img_input, human_model)
+            inputs, origin_img, center, scale = PreProcess(img_input, bboxs, scores, cfg)
 
-            # 第一帧
-            if i == 0:
-                inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
-            else:
-                # 本帧、上一帧 边框置信度NMS
-                if not (flow_bbox_scores>scores).tolist()[0][0]:
-                    flow_boxs = bboxs
-                inputs, origin_img, center, scale = PreProcess(input_image, flow_boxs, scores, cfg)
-
-        except:
-            out.write(input_image)
-            cv2.namedWindow("enhanced",0);
-            cv2.resizeWindow("enhanced", 960, 480);
-            cv2.imshow('enhanced', input_image)
-            cv2.waitKey(2)
+        except Exception as e:
+            print(e)
             continue
 
+        detected_image_num += 1
         with torch.no_grad():
-            # compute output heatmap
             inputs = inputs[:,[2,1,0]]
             output = pose_model(inputs.cuda())
-            # compute coordinate
             preds, maxvals = get_final_preds(
                 cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
 
-        # 当前帧边框置信度, 作为下一帧流边框的置信度
-        flow_bbox_scores = scores.copy()
+            #  vis = np.ones(shape=maxvals.shape,)
+            vis = maxvals
+            preds = preds.astype(np.float16)
+            keypoints = np.concatenate((preds, vis), -1)
+            for k, s in zip(keypoints, scores[0].tolist()):
+                box_num += 1
+                k = k.flatten().tolist()
+                item = {"image_id": imgId, "category_id": 1, "keypoints": k, "score":s}
+                kpts_result.append(item)
 
-        if i != 1:
-            preds = (preds + flow_kpts) / 2
-
-        image = plot_keypoint(origin_img, preds, maxvals, 0.1)
-        out.write(image)
-        keypoints = np.concatenate((preds, maxvals), 2)
 
 
-        if args.display:
-            ########### 指定屏幕大小
-            cv2.namedWindow("enhanced", cv2.WINDOW_GUI_NORMAL);
-            cv2.resizeWindow("enhanced", 960, 480);
-            cv2.imshow('enhanced', image)
-            cv2.waitKey(1)
+    num_joints = 17
+    in_vis_thre = 0.2
+    oks_thre = 0.5
+    oks_nmsed_kpts = []
+    for i in range(len(kpts_result)):
+        img_kpts = kpts_result[i]['keypoints']
+        kpt = np.array(img_kpts).reshape(17,3)
+        box_score = kpts_result[i]['score']
+        kpt_score = 0
+        valid_num = 0
+        # each joint for bbox
+        for n_jt in range(0, num_joints):
+            # score
+            t_s = kpt[n_jt][2]
+            if t_s > in_vis_thre:
+                kpt_score = kpt_score + t_s
+                valid_num = valid_num + 1
+        if valid_num != 0:
+            kpt_score = kpt_score / valid_num
+
+        # rescoring 关节点的置信度 与 box的置信度的乘积
+        kpts_result[i]['score'] = kpt_score * box_score
+
+
+
+
+    import json
+    data = json.dumps(kpts_result)
+    print('image num is {} \tdetected_image num is {}\t person num is {}'.format(len(imgIds), detected_image_num, box_num)),
+    #  data = json.dumps(str(kpts_result))
+    with open('person_keypoints.json', 'wt') as f:
+        #  pass
+        f.write(data)
+
 
 if __name__ == '__main__':
     main()

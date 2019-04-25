@@ -126,6 +126,7 @@ def main():
 
     #### load pose-hrnet MODEL
     pose_model = model_load(cfg)
+    #  pose_model = torch.nn.DataParallel(pose_model, device_ids=[0,1]).cuda()
     pose_model.cuda()
 
     item = 0
@@ -135,11 +136,11 @@ def main():
         ret_val, input_image = cam.read()
 
 
-        if args.camera:
-            # 为取得实时速度，每两帧取一帧预测
-            if item == 0:
-                item = 1
-                continue
+        #  if args.camera:
+            #  #  为取得实时速度，每两帧取一帧预测
+            #  if item == 0:
+                #  item = 1
+                #  continue
 
         item = 0
         try:
@@ -149,7 +150,7 @@ def main():
         except:
             out.write(input_image)
             cv2.namedWindow("enhanced",0);
-            cv2.resizeWindow("enhanced", 1920, 1080);
+            cv2.resizeWindow("enhanced", 960, 480);
             cv2.imshow('enhanced', input_image)
             cv2.waitKey(2)
             continue
@@ -164,7 +165,6 @@ def main():
 
         image = plot_keypoint(origin_img, preds, maxvals, 0.1)
         out.write(image)
-
         if args.display:
             ######### 全屏
             #  out_win = "output_style_full_screen"
@@ -174,7 +174,7 @@ def main():
 
             ########### 指定屏幕大小
             cv2.namedWindow("enhanced", cv2.WINDOW_GUI_NORMAL);
-            cv2.resizeWindow("enhanced", 1920, 1080);
+            cv2.resizeWindow("enhanced", 960, 480);
             cv2.imshow('enhanced', image)
             cv2.waitKey(1)
 

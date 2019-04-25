@@ -1,4 +1,5 @@
 import numpy as np
+
 import ipdb;pdb=ipdb.set_trace
 
 
@@ -7,8 +8,11 @@ def box_area(box):
     x0, y0, x1, y1 = box
     # y0 > y1 or x0 > x1 会变成负数
     area = (y1-y0) * (x1-x0)
-
     area = max(area, 0)
+
+
+
+
     return area
 
 def box_iou(box1, box2):
@@ -20,15 +24,14 @@ def box_iou(box1, box2):
     y1 = min(box1[3], box2[3])
     box_intersection = [x0, y0, x1, y1]
     S_intesection = box_area(box_intersection)
-    return S_intesection/(S1+S2 - S_intesection)
+    return S_intesection/(S1+S2)
 
 
-def boxes_similarity(boxs1, boxs2):
+def boxs_similarity(boxs1, boxs2):
     '''
-    boxs1: (N, 5)
-    boxs2: (M, 5)
+    boxs1: (N, 4)
+    boxs2: (M, 4)
     '''
-    boxs1, boxs2 =boxs1[...,:4], boxs2[...,:4]
     matrix = np.zeros(shape=(len(boxs1), len(boxs2)))
     for i in range(len(boxs1)):
         for j in range(len(boxs2)):
@@ -183,7 +186,7 @@ def bipartite_matching_greedy(C):
         row_id = row_ids[i]
         col_id = col_ids[j]
 
-        if C[i][j] < 0.01:
+        if C[i][j] < 0.0001:
             return prev_ids, cur_ids
 
         prev_ids.append(row_id)

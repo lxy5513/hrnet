@@ -1,12 +1,12 @@
 import sys
 sys.path.append('/home/xyliu/2D_pose/deep-high-resolution-net.pytorch/flow_net')
 import ipdb;pdb=ipdb.set_trace
-from flow_models import FlowNet2
 import numpy as np
 import torch
+from flow_models import FlowNet2, FlowNet2S
 
 
-def load_model():
+def load_model(model_type='2'):
 
     class parsers():
         #'Run model in pseudo-fp16 mode (fp16 storage fp32 math)
@@ -16,10 +16,14 @@ def load_model():
 
     args = parsers()
 
-    #initial a Net
-    net = FlowNet2(args).cuda()
-    #load the state_dict
-    dict = torch.load("/home/xyliu/2D_pose/deep-high-resolution-net.pytorch/flow_net/models/FlowNet2_checkpoint.pth.tar")
+    if model_type == '2S':
+        #initial a Net
+        net = FlowNet2S(args).cuda()
+        dict = torch.load("/home/xyliu/2D_pose/deep-high-resolution-net.pytorch/flow_net/models/FlowNet2-S_checkpoint.pth.tar")
+    else:
+        net = FlowNet2(args).cuda()
+        dict = torch.load("/home/xyliu/2D_pose/deep-high-resolution-net.pytorch/flow_net/models/FlowNet2_checkpoint.pth.tar")
+
     net.load_state_dict(dict["state_dict"])
     net.eval()
     return net
@@ -53,16 +57,23 @@ def flow_propagation(keypoints, flow):
         boxes (ndarray): [num_people, 4]
                          boxes propagated from previous frame.
     """
-    extend_factor = 0.15
+    extend_factor = 0.4
     H = flow.shape[1]
     W = flow.shape[2]
     num_kpts = keypoints.shape[1]
     flow = flow.transpose((2,1,0))  # [W, H, 2]
-    pos = keypoints[:,:,:2].reshape(-1,2).T.astype(int).tolist()
-    offset = flow[pos].reshape(-1,num_kpts,2)
+    pos = keypoints[:,:,:2].reshape(-1,2).T.astype(int)
+
+    # pos 坐标要在H，W范围之内
+    #  pos[0] = pos[0] * (pos[0]<W)
+    #  pos[1] = pos[1] * (pos[1]<H)
+    pos = pos.tolist()
+
+    offset = flow[tuple(pos)].reshape(-1,num_kpts,2)
     shift_keypoints = keypoints[:,:,:2] + offset
     mask = keypoints[:,:,2] > 0
     mask = mask[:,:,np.newaxis]
+    #  import ipdb;ipdb.set_trace()
     # 选出shfit_keypoints的最大最小位置
     min_ = np.min(shift_keypoints+(1-mask)*max(H,W), axis=1)  # [N,2]
     max_ = np.max(shift_keypoints*mask, axis=1)  # [N,2]

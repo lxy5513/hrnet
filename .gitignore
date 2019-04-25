@@ -4,6 +4,9 @@
 out
 gen
 
+
+*.mp4
+
 ### Vim template
 [._]*.s[a-w][a-z]
 [._]s[a-w][a-z]
@@ -92,4 +95,5 @@ external/
 
 draws/
 plot/
+*.tar
 

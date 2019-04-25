@@ -12,7 +12,7 @@ import pprint
 import ipdb;pdb=ipdb.set_trace
 import numpy as np
 from tqdm import tqdm
-from utilitys import plot_keypoint, PreProcess, plot_keypoint_track
+from utilitys import plot_keypoint, PreProcess, plot_keypoint_track, plot_boxes
 import time
 
 import torch
@@ -28,6 +28,7 @@ import models
 from lib.detector.yolo.human_detector import main as yolo_det
 from flow_utils import *
 from track_u import bipartite_matching_greedy, compute_pairwise_oks, boxes_similarity
+from track_u import box_area
 
 
 def parse_args():
@@ -72,18 +73,25 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def match_ids(previous_ids, flow_filter_ids, cur_ids, cur_len):
+def match_ids(previous_ids, map_ids, cur_ids, cur_len):
     '''
     先添加匹配的， 再添加previous_ids中未匹配的， 再添加cur_boxes中剩余的
     '''
     global prev_max_id
     cur_maps = -np.ones(shape=(cur_len,))
 
-    for pos, num in enumerate(cur_ids):
-        cur_maps[num] = previous_ids[flow_filter_ids[pos]]
+    for pos,num in enumerate(cur_ids):
+        cur_maps[num] = previous_ids[map_ids[pos]]
 
-    prev_max_id = max(max(previous_ids), prev_max_id)
+    # previous中不含有cur_map得数
+    tmp_nums = np.setdiff1d(previous_ids, cur_maps).tolist()
+    for i in tmp_nums:
+        for j in range(len(cur_maps)):
+            if cur_maps[j] == -1.:
+                cur_maps[j] = i
+                break
 
+    max_id = max(max(previous_ids), max_id)
 
     for i in range(cur_len):
         if cur_maps[i] == -1.:
@@ -93,30 +101,79 @@ def match_ids(previous_ids, flow_filter_ids, cur_ids, cur_len):
     nms_ids = cur_maps.astype(np.uint8).tolist()
     return nms_ids
 
-def boxes_nms(flow_boxes, cur_boxes, previous_ids):
-    '''
-    flow_boxes: (N, 4)
-    cur_boxes: (M, 4)
-    flow_scores: (N)
-    cur_scores: (M)
 
-    返回筛选之后的boxes和ids
+
+def pose_match_ids(previous_ids, flow_filter_ids, cur_ids, cur_len):
     '''
-    boxes_similarity_matrix = boxes_similarity(flow_boxes, cur_boxes)
+    先添加匹配的， 再添加previous_ids中未匹配的
+    '''
+    global max_id
+    cur_maps = -np.ones(shape=(cur_len,))
+
+    for pos,num in enumerate(cur_ids):
+        cur_maps[num] = previous_ids[flow_filter_ids[pos]]
+
+    max_id = max(max(previous_ids), max_id)
+
+    for i in range(cur_len):
+        if cur_maps[i] == -1.:
+            max_id += 1
+            cur_maps[i] = max_id
+
+    nms_ids = cur_maps.astype(np.uint8).tolist()
+    return nms_ids
+
+
+
+
+def boxes_nms_test(flow_boxes, cur_boxes, previous_ids, image_resolution):
+    '''
+    flow_boxes: (N, 5) -> 5: x0,y0,x1,y1,score
+    cur_boxes: (M, 5)
+    previous_ids: flow_boxes的排列顺序
+    image_resolution (W, H)
+    返回筛选之后的boxes和相应的ids
+    '''
+    global max_id
+
+    boxes_similarity_matrix = boxes_similarity(flow_boxes[...,:4], cur_boxes[...,:4])
     flow_filter_ids, cur_ids = bipartite_matching_greedy(boxes_similarity_matrix)
+
+    # 匹配之后剩下的
     tmp1_boxes = flow_boxes[flow_filter_ids,]
     tmp2_boxes = cur_boxes[cur_ids,]
-    cur_len = len(flow_boxes) + len(cur_boxes) - len(cur_ids)
-    nms_ids = match_ids(previous_ids, flow_filter_ids, cur_ids, cur_len)
 
+    # 如果多出边框的话，表示新出现人体, 添加进boxes
     if len(np.setdiff1d(flow_boxes, tmp1_boxes)) != 0:
-        tmp1_boxes = np.concatenate((tmp1_boxes , np.setdiff1d(flow_boxes, tmp1_boxes).reshape(-1, 4)), 0)
+        tmp1_boxes = np.concatenate((tmp1_boxes , np.setdiff1d(flow_boxes, tmp1_boxes).reshape(-1, 5)), 0)
 
+    # 如果flow-boxes有未检测到人体 P1. 确实是消失了(丢弃) P2. YOLO检测器没检测到（放入boxes)
     if len(np.setdiff1d(cur_boxes, tmp2_boxes)) != 0:
-        tmp1_boxes = np.concatenate((tmp1_boxes , np.setdiff1d(cur_boxes, tmp2_boxes).reshape(-1, 4)), 0)
+        remained_boxes = np.setdiff1d(cur_boxes, tmp2_boxes).reshape(-1, 5)
+        for item_box in remained_boxes:
+            # P1
+            box_area_value = box_area(item_box)
+            if box_area_value < 1/10 * image_resolution[0] * image_resolution[1]:
+                print('flow box dispear...')
+                pdb()
+
+            # P2
+            else:
+                tmp1_boxes = np.concatenate((tmp1_boxes , np.expand_dims(item_box, 0)), 0)
 
     nms_boxes = tmp1_boxes
+    cur_len = len(nms_boxes)
+    cur_maps = -np.ones(shape=(cur_len,))
 
+    for pos, num in enumerate(cur_ids):
+        cur_maps[pos] = previous_ids[flow_filter_ids[pos]]
+
+    for i in range(cur_len):
+        if cur_maps[i] == -1.:
+            max_id += 1
+            cur_maps[i] = max_id
+
+    nms_ids = cur_maps.astype(np.uint8).tolist()
     return nms_boxes, nms_ids
 
 
@@ -148,14 +205,15 @@ def ckpt_time(t0=None, display=None):
             print('consume {:2f} second'.format(t1-t0))
         return t1-t0, t1
 
-
 ###### 加载human detecotor model
 from lib.detector.yolo.human_detector import load_model as yolo_model
 sys.path.remove('/home/xyliu/2D_pose/deep-high-resolution-net.pytorch/flow_net')
 human_model = yolo_model()
 
-prev_max_id = 0
+# 目前id最大值
+max_id = 0
 def main():
+    global max_id
     args = parse_args()
     update_config(cfg, args)
 
@@ -168,9 +226,10 @@ def main():
         video_length = 30000
 
     ret_val, input_image = cam.read()
-    # 保持长宽都是64的倍数
+    # 保持长宽都是64的倍数，用于flownet2
     resize_W = int(input_image.shape[1] / 64) * 64
     resize_H = int((input_image.shape[0] / input_image.shape[1] * resize_W) / 64 ) * 64
+    image_resolution = (resize_W, resize_H)
     print(resize_W, resize_H)
     input_image = cv2.resize(input_image, (resize_W, resize_H))
     # Video writer
@@ -185,41 +244,38 @@ def main():
     pose_model = model_load(cfg)
     pose_model.cuda()
 
-    flow_boxs = 0
-    flow_kpts = 0
-
-    previous_ids = 0
-    pdb()
     for i in tqdm(range(video_length-1)):
         ret_val, input_image = cam.read()
         input_image = cv2.resize(input_image, (resize_W, resize_H))
 
-        if i > 0:
-            try:
-                flow_result = flow_net(pre_image, input_image, flow_model)
-                flow_boxs, flow_kpts = flow_propagation(pre_keypoints, flow_result)
-                flow_kpts = np.concatenate((flow_kpts, flow_pose_scores), -1)
-            except Exception as e:
-                print(e)
-                continue
-
-        pre_image = input_image
-
         try:
-            # boxes_threthold is 0.6
-            bboxs, scores = yolo_det(input_image, human_model) # bbox is coordinate location
+            if i > 0:
+                pdb()
+                flow_result = flow_net(pre_image, input_image, flow_model)
+                flow_boxes, flow_kpts = flow_propagation(prev_kpts, flow_result)
+                flow_boxes = np.concatenate((flow_boxes, np.expand_dims(prev_boxes[...,4], -1)), -1) # flow_boxes + previous boxes scores
+                flow_kpts = np.concatenate((flow_kpts,prev_kpts_scores), -1)
 
-            # 第一帧
+            # boxes_threthold is 0.9
+            detected_boxes, detected_scores = yolo_det(input_image, human_model) # bbox is coordinate location
+            detected_scores = np.expand_dims(detected_scores.flatten(), -1)
+            detected_boxes = np.concatenate((detected_boxes, detected_scores), -1) # (N, 17, 3)
+
             if i == 0:
-                inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
-                # 初始IDs, 和 socres map
-                previous_ids = [i for i in range(len(bboxs))]
-                #  id_scores_map = {}
-                #  for i in range(len(bboxs)): id_scores_map.update({previous_ids[i]: scores[i]})
+                inputs, origin_img, center, scale = PreProcess(input_image, detected_boxes[...,:4],  detected_boxes[...,4], cfg)
+                #  ploted_image = plot_boxes(input_image, detected_boxes, [i for i in range(len(detected_boxes))])
+                #  cv2.imshow('image', ploted_image)
+                #  cv2.waitKey(100)
             else:
-                # 本帧、上一帧 边框置信度NMS
-                #  new_boxs, new_ids = boxes_nms(flow_boxs, bboxs, previous_ids)
-                inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
+                # 最难！ 会重新给pose net一个输入顺序, 并且给出相应的ids
+                print('before mapping: ', previous_ids)
+                new_boxes, new_ids = boxes_nms_test(flow_boxes, detected_boxes, previous_ids, image_resolution)
+                print('after mapping: ', new_ids)
+                print(flow_boxes[:, 1], detected_boxes[:, 1])
+                #  ploted_image = plot_boxes(input_image, new_boxes, new_ids)
+                #  cv2.imshow('image', ploted_image)
+                #  cv2.waitKey(100)
+                inputs, origin_img, center, scale = PreProcess(input_image, new_boxes[..., :4], new_boxes[...,4], cfg)
 
         except Exception as e:
             print(e)
@@ -230,76 +286,54 @@ def main():
             cv2.waitKey(2)
             continue
 
+        # 姿态检测
         with torch.no_grad():
             # compute output heatmap
             inputs = inputs[:,[2,1,0]]
             output = pose_model(inputs.cuda())
             # compute coordinate
-            preds, maxvals = get_final_preds(
+            detected_kpts, detected_kpts_scores = get_final_preds(
                 cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
-            keypoints = np.concatenate((preds, maxvals), 2)
+            detected_kpts = np.concatenate((detected_kpts, detected_kpts_scores), 2)
 
-        # 当前帧边框置信度, 作为下一帧流边框的置信度
-        #  flow_bbox_scores = scores.copy()
 
-        #  if i != 1:
-            #  preds = (preds + flow_kpts) / 2
-
-        # shift-kpts, shift-boxes, cur_kpts ------> TRACK
-
+        # TRACK Assign IDs. flow_boxes; detected_boxes, new_ids
         if i>0:
-            kps_b = keypoints.copy()
-            box_b = bboxs[:preds.shape[0]]
-            kps_a = flow_kpts  # (N, 17, 3)
-            box_a = flow_boxs
-
-            pose_similarity_matrix = compute_pairwise_oks(kps_a, box_a, kps_b)
-            box_similarity_matrix = boxs_similarity(box_a, box_b)
+            pose_similarity_matrix = compute_pairwise_oks(flow_kpts, flow_boxes[...,:4], detected_kpts)
+            box_similarity_matrix = boxes_similarity(flow_boxes[...,:4], detected_boxes[...,:4])
             ratio = 0.5
             similarity_matrix = pose_similarity_matrix*ratio + box_similarity_matrix*(1-ratio)
             prev_filter_ids, cur_ids = bipartite_matching_greedy(similarity_matrix)
 
-            print('previous frame boxes: ',previous_ids)
+            print('previous frame boxes: ', prev_pose_ids)
+            cur_len = len(detected_kpts)
+            new_pose_ids = pose_match_ids(prev_pose_ids, prev_filter_ids, cur_ids, cur_len)
+
+            #  detected_kpts = detected_kpts[ [i-1 for i in new_ids],:]
+            #  detected_kpts_scores = detected_kpts_scores[[i-1 for i in new_ids],:]
             print(prev_filter_ids, cur_ids)
+            print('after map: ', new_pose_ids)
 
-            cur_len = len(box_b) + len(box_a) - len(cur_ids)
-            cur_maps = -np.ones(shape=(cur_len,))
+        # 为下一帧处理做准备
+        pre_image = input_image.copy()
+        prev_kpts = detected_kpts
+        prev_kpts_scores = detected_kpts_scores
+        if i == 0:
+            prev_boxes = detected_boxes
+            previous_ids = [j for j in range(len(detected_boxes))]
+            prev_pose_ids = previous_ids
 
-            new_boxes = []
-            new_kpts = []
-
-            for pos, num in enumerate(cur_ids):
-                cur_maps[pos] = previous_ids[prev_filter_ids[pos]]
-                new_boxes.append(bo)
-
-            prev_max_id = max(max(previous_ids), prev_max_id)
-
-            for i in range(cur_len):
-                if cur_maps[i] == -1.:
-                    prev_max_id += 1
-                    cur_maps[i] = prev_max_id
-
-            previous_ids = cur_maps.astype(np.uint8).tolist()
-            print('after map: ', previous_ids)
-
-
-
-        # 整理好传给下一帧flownet的关键点, ids,
-        if i==0:
-            pre_flow_keypoints = keypoints
-            pre_flow_pkt_scores = scores.copy()
-        # 根据映射结果
         else:
-            pre_flow_keypoints = tracked_keypoints
-            pre_flow_pkt_scores = tracked_scores
-
-
-
+            previous_ids = new_ids
+            prev_boxes = new_boxes
+            prev_pose_ids = new_pose_ids
         if i>1:
-            image = plot_keypoint_track(origin_img, preds, maxvals, box_b, previous_ids, 0.1)
+            image = plot_keypoint_track(origin_img, detected_kpts, detected_kpts_scores, new_boxes[...,:4], new_pose_ids, 0.1)
+        else:
+            image = plot_keypoint_track(origin_img, detected_kpts, detected_kpts_scores, detected_boxes[...,:4], previous_ids, 0.1)
 
 
-        if args.display and i>1:
+        if args.display :
             ########### 指定屏幕大小
             cv2.namedWindow("enhanced", cv2.WINDOW_GUI_NORMAL);
             cv2.resizeWindow("enhanced", 960, 480);

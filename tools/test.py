@@ -117,7 +117,7 @@ def main():
 
     if not cfg.TEST.MODEL_FILE:
         logger.info('=> loading model from {}'.format(cfg.TEST.MODEL_FILE))
-        model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_256x192.pth' 
+        model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_256x192.pth'
         model.load_state_dict(torch.load(model_file_name), strict=False)
     else:
         model_state_file = os.path.join(

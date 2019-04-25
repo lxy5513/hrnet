@@ -21,6 +21,7 @@ import numpy as np
 from dataset.JointsDataset import JointsDataset
 from nms.nms import oks_nms
 from nms.nms import soft_oks_nms
+import ipdb;pdb=ipdb.set_trace
 
 
 logger = logging.getLogger(__name__)
@@ -53,16 +54,17 @@ class COCODataset(JointsDataset):
     '''
     def __init__(self, cfg, root, image_set, is_train, transform=None):
         super().__init__(cfg, root, image_set, is_train, transform)
-        self.nms_thre = cfg.TEST.NMS_THRE
-        self.image_thre = cfg.TEST.IMAGE_THRE
+        self.nms_thre = cfg.TEST.NMS_THRE # 0.6
+        self.image_thre = cfg.TEST.IMAGE_THRE # 0.1
         self.soft_nms = cfg.TEST.SOFT_NMS
-        self.oks_thre = cfg.TEST.OKS_THRE
+        self.oks_thre = cfg.TEST.OKS_THRE # 0.5
         self.in_vis_thre = cfg.TEST.IN_VIS_THRE
         self.bbox_file = cfg.TEST.COCO_BBOX_FILE
-        self.use_gt_bbox = cfg.TEST.USE_GT_BBOX
+        self.bbox_file = 'yolo_detection_person.json' #########################
+        self.use_gt_bbox = cfg.TEST.USE_GT_BBOX #########################
         self.image_width = cfg.MODEL.IMAGE_SIZE[0]
         self.image_height = cfg.MODEL.IMAGE_SIZE[1]
-        self.aspect_ratio = self.image_width * 1.0 / self.image_height
+        self.aspect_ratio = self.image_width * 1.0 / self.image_height # 宽除以高
         self.pixel_std = 200
 
         self.coco = COCO(self._get_ann_file_keypoint())
@@ -212,10 +214,14 @@ class COCODataset(JointsDataset):
         return self._xywh2cs(x, y, w, h)
 
     def _xywh2cs(self, x, y, w, h):
+        '''
+        1. 保持aspect_ratio 长边不变 2.除以pixel_std 3. 扩大1.25倍
+        '''
         center = np.zeros((2), dtype=np.float32)
         center[0] = x + w * 0.5
         center[1] = y + h * 0.5
 
+        # 大的不变，改变小的保持纵横比
         if w > self.aspect_ratio * h:
             h = w * 1.0 / self.aspect_ratio
         elif w < self.aspect_ratio * h:
@@ -244,9 +250,15 @@ class COCODataset(JointsDataset):
         return image_path
 
     def _load_coco_person_detection_results(self):
+
         all_boxes = None
         with open(self.bbox_file, 'r') as f:
+            print('>>>>>>>>>>>>>>>>>>>>>>>load person detection results from {}'.format(self.bbox_file))
             all_boxes = json.load(f)
+
+        # 自己添加
+        if isinstance(all_boxes, str):
+            all_boxes = eval(all_boxes)
 
         if not all_boxes:
             logger.error('=> Load %s fail!' % self.bbox_file)
@@ -318,25 +330,31 @@ class COCODataset(JointsDataset):
         for kpt in _kpts:
             kpts[kpt['image']].append(kpt)
 
+        # 处理之前 box的数量
+
+
         # rescoring and oks nms
         num_joints = self.num_joints
-        in_vis_thre = self.in_vis_thre
+        in_vis_thre = self.in_vis_thre #0.2
         oks_thre = self.oks_thre
         oks_nmsed_kpts = []
         for img in kpts.keys():
             img_kpts = kpts[img]
+            # 每张图片有多少bboxes
             for n_p in img_kpts:
                 box_score = n_p['score']
                 kpt_score = 0
                 valid_num = 0
+                # each joint for bbox
                 for n_jt in range(0, num_joints):
+                    # score
                     t_s = n_p['keypoints'][n_jt][2]
                     if t_s > in_vis_thre:
                         kpt_score = kpt_score + t_s
                         valid_num = valid_num + 1
                 if valid_num != 0:
                     kpt_score = kpt_score / valid_num
-                # rescoring
+                # rescoring 关节点的置信度 与 box的置信度的乘积
                 n_p['score'] = kpt_score * box_score
 
             if self.soft_nms:
@@ -354,6 +372,7 @@ class COCODataset(JointsDataset):
                 oks_nmsed_kpts.append(img_kpts)
             else:
                 oks_nmsed_kpts.append([img_kpts[_keep] for _keep in keep])
+                #  oks_nmsed_kpts.append(img_kpts)
 
         self._write_coco_keypoint_results(
             oks_nmsed_kpts, res_file)
@@ -419,6 +438,7 @@ class COCODataset(JointsDataset):
                     'category_id': cat_id,
                     'keypoints': list(key_points[k]),
                     'score': img_kpts[k]['score'],
+                    # 后两者不会对AP AR造成影响
                     'center': list(img_kpts[k]['center']),
                     'scale': list(img_kpts[k]['scale'])
                 }
@@ -429,6 +449,7 @@ class COCODataset(JointsDataset):
         return cat_results
 
     def _do_python_keypoint_eval(self, res_file, res_folder):
+        print('>>>>>>>>>>>>>>used for accuracy metric file is ', res_file)
         coco_dt = self.coco.loadRes(res_file)
         coco_eval = COCOeval(self.coco, coco_dt, 'keypoints')
         coco_eval.params.useSegm = None

@@ -102,6 +102,7 @@ _C.TEST.FLIP_TEST = False
 _C.TEST.POST_PROCESS = False
 _C.TEST.SHIFT_HEATMAP = False
 
+# 使用检测器的BBOX
 _C.TEST.USE_GT_BBOX = False
 
 # nms

@@ -142,7 +142,7 @@ def _xywh2cs(x, y, w, h, image_width, image_height):
     return center, scale #(宽、高)
 
 ###### Pre-process
-def PreProcess(image, bboxs, scores, cfg, thred_score=0.6):
+def PreProcess(image, bboxs, scores, cfg, thred_score=0.1):
 
     if type(image) == str:
         data_numpy = cv2.imread(image, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)

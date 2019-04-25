@@ -7,7 +7,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
- 
+
 import time
 import logging
 import os
@@ -19,6 +19,7 @@ from core.evaluate import accuracy
 from core.inference import get_final_preds
 from utils.transforms import flip_back
 from utils.vis import save_debug_images
+import ipdb;pdb=ipdb.set_trace
 
 
 logger = logging.getLogger(__name__)
@@ -171,6 +172,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             preds, maxvals = get_final_preds(
                 config, output.clone().cpu().numpy(), c, s)
 
+            # 按照idx序列排序
             all_preds[idx:idx + num_images, :, 0:2] = preds[:, :, 0:2]
             all_preds[idx:idx + num_images, :, 2:3] = maxvals
             # double check this all_boxes parts

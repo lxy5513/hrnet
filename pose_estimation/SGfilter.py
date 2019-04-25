@@ -87,11 +87,11 @@ def smooth_filter(kpts):
     transKpts = np.array(kpt_queue).transpose(1,2,3,0)
 
     window_length = queue_length - 1 if queue_length % 2 == 0 else queue_length - 2
-    # array, window_length越大越好, polyorder 
+    # array, window_length越大越好, polyorder
     result = savgol_filter(transKpts, window_length, 3).transpose(3, 0, 1, 2) #shape(frame_num, human_num, 17, 2)
 
     # 返回倒数第几帧
-    return result[-3]
+    return result[-2]
 
 
 
@@ -160,7 +160,6 @@ def main():
         x0 = ckpt_time()
         ret_val, input_image = cam.read()
 
-
         if args.camera:
             # 为取得实时速度，每两帧取一帧预测
             if item == 0:
@@ -192,9 +191,9 @@ def main():
         # 平滑点
         preds = smooth_filter(preds)
         #  preds = np.expand_dims(preds, 0)
-        origin_img = np.zeros(origin_img.shape, np.uint8)
-        image = plot_keypoint(origin_img, preds, maxvals, 0.1)
-        if i >= 14:
+        #  origin_img = np.zeros(origin_img.shape, np.uint8)
+        image = plot_keypoint(origin_img, preds, maxvals, 0.3)
+        if i >= 9:
             out.write(image)
         if args.display:
             ########### 指定屏幕大小
