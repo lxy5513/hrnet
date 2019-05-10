@@ -11,7 +11,7 @@ python pose_estimation/video.py
 
 ## UPDATE 2019-05-21
 add high mAP mmdetection
-`python demo_mmd.py`
+`python pose_estimation/demo_mmd.py`
 <br>
 
 do RP accuracy  test
