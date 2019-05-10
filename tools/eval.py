@@ -1,5 +1,5 @@
 '''
-使用yolov3作为pose net模型的前处理
+使用mmdetection作为pose net模型的前处理
 '''
 from __future__ import absolute_import
 from __future__ import division
@@ -24,7 +24,8 @@ from utils.transforms import *
 from lib.core.inference import get_final_preds
 import cv2
 import models
-from lib.detector.yolo.human_detector import main as yolo_det
+#  from lib.detector.yolo.human_detector import human_bbox_get as yolo_det
+from lib.detector.mmdetection.high_api import human_boxes_get as mm_det
 from collections import OrderedDict
 import matplotlib.pyplot as plt
 
@@ -101,8 +102,11 @@ def ckpt_time(t0=None, display=None):
 
 
 ###### 加载human detecotor model
-from lib.detector.yolo.human_detector import load_model as yolo_model
-human_model = yolo_model()
+#  from lib.detector.yolo.human_detector import load_model as yolo_model
+#  human_model = yolo_model()
+
+from lib.detector.mmdetection.high_api import load_model as mm_model
+human_model = mm_model() 
 
 def main():
     args = parse_args()
@@ -130,7 +134,7 @@ def main():
         img_input = plt.imread(img)
 
         try:
-            bboxs, scores = yolo_det(img_input, human_model)
+            bboxs, scores = mm_det(human_model, img_input, 0.3)
             inputs, origin_img, center, scale = PreProcess(img_input, bboxs, scores, cfg)
 
         except Exception as e:
@@ -139,7 +143,6 @@ def main():
 
         detected_image_num += 1
         with torch.no_grad():
-            inputs = inputs[:,[2,1,0]]
             output = pose_model(inputs.cuda())
             preds, maxvals = get_final_preds(
                 cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
@@ -148,7 +151,7 @@ def main():
             vis = maxvals
             preds = preds.astype(np.float16)
             keypoints = np.concatenate((preds, vis), -1)
-            for k, s in zip(keypoints, scores[0].tolist()):
+            for k, s in zip(keypoints, scores.tolist()):
                 box_num += 1
                 k = k.flatten().tolist()
                 item = {"image_id": imgId, "category_id": 1, "keypoints": k, "score":s}

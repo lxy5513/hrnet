@@ -149,6 +149,8 @@ def PreProcess(image, bboxs, scores, cfg, thred_score=0.1):
     else:
         data_numpy = image
 
+    data_numpy = cv2.cvtColor(data_numpy, cv2.COLOR_BGR2RGB)
+
     inputs = []
     centers = []
     scales = []

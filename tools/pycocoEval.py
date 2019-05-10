@@ -28,7 +28,7 @@ def _print_name_value(name_value, full_arch_name):
 
 gt_anns = 'data/coco/annotations/person_keypoints_val2017.json'
 #  dt_anns = '/home/xyliu/2D_pose/deep-high-resolution-net.pytorch/person_keypoints.json'
-dt_anns = 'output/coco/pose_hrnet/w32_256x192_adam_lr1e-3/results/keypoints_val2017_results_0.json'
+dt_anns = '/home/xyliu/2D_pose/simple-pose-estimation/person_keypoints.json'
 
 annType = 'keypoints'
 cocoGt=COCO(gt_anns)
@@ -45,7 +45,7 @@ for ind, name in enumerate(stats_names):
     info_str.append((name, cocoEval.stats[ind]))
 
 name_values = OrderedDict(info_str)
-model_name = 'hrnet'
+model_name = 'openpose'
 
 if isinstance(name_values, list):
     for name_value in name_values:
