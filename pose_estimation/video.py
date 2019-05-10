@@ -25,7 +25,8 @@ from lib.core.inference import get_final_preds
 import cv2
 #  import ataset
 import models
-from lib.detector.yolo.human_detector import main as yolo_det
+from lib.detector.yolo.human_detector import human_bbox_get as yolo_det
+from lib.detector.mmdetection.high_api import human_boxes_get as mm_det
 
 
 def parse_args():
@@ -103,7 +104,10 @@ def ckpt_time(t0=None, display=None):
 
 ###### 加载human detecotor model
 from lib.detector.yolo.human_detector import load_model as yolo_model
-human_model = yolo_model()
+#  human_model = yolo_model()
+
+from lib.detector.mmdetection.high_api import load_model as mm_model
+human_model = mm_model()
 
 def main():
     args = parse_args()
@@ -135,7 +139,6 @@ def main():
         x0 = ckpt_time()
         ret_val, input_image = cam.read()
 
-
         #  if args.camera:
             #  #  为取得实时速度，每两帧取一帧预测
             #  if item == 0:
@@ -144,7 +147,7 @@ def main():
 
         item = 0
         try:
-            bboxs, scores = yolo_det(input_image, human_model)
+            bboxs, scores = mm_det(human_model, input_image)
             # bbox is coordinate location
             inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
         except:

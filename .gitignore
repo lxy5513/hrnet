@@ -3,6 +3,7 @@
 *.iml
 out
 gen
+*.json
 
 
 *.mp4

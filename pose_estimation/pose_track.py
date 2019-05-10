@@ -24,7 +24,7 @@ from utils.transforms import *
 from lib.core.inference import get_final_preds
 import cv2
 import models
-from lib.detector.yolo.human_detector import main as yolo_det
+from lib.detector.yolo.human_detector import human_bbox_get as yolo_det
 from track_u import bipartite_matching_greedy, compute_pairwise_oks, boxes_similarity
 
 
@@ -78,8 +78,6 @@ def model_load(config):
         config, is_train=False
     )
     model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_256x192.pth'
-    #  model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w48_256x192.pth'
-    #  model_file_name  = 'models/pytorch/pose_coco/pose_hrnet_w32_384x288.pth'
     state_dict = torch.load(model_file_name)
     from collections import OrderedDict
     new_state_dict = OrderedDict()
@@ -100,13 +98,6 @@ def ckpt_time(t0=None, display=None):
             print('consume {:2f} second'.format(t1-t0))
         return t1-t0, t1
 
-def filter_small_boxes(boxes, min_size):
-    assert boxes.shape[1] == 4, 'Func doesnot support tubes yet'
-    w = boxes[:, 2] - boxes[:, 0]
-    h = boxes[:, 3] - boxes[:, 1]
-    keep = np.where((w >= min_size) & (h > min_size))[0]
-    return keep
-
 ###### 加载human detecotor model
 from lib.detector.yolo.human_detector import load_model as yolo_model
 human_model = yolo_model()
@@ -125,11 +116,9 @@ def main():
         video_length = 30000
 
     ret_val, input_image = cam.read()
-    # Video writer
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     input_fps = cam.get(cv2.CAP_PROP_FPS)
     out = cv2.VideoWriter(args.video_output,fourcc, input_fps, (input_image.shape[1],input_image.shape[0]))
-
 
     #### load pose-hrnet MODEL
     pose_model = model_load(cfg)
@@ -138,10 +127,8 @@ def main():
     item = 0
     prev_max_id = 0
     for i in tqdm(range(video_length-1)):
-
         x0 = ckpt_time()
         ret_val, input_image = cam.read()
-
         item = 0
         try:
             bboxs, scores = yolo_det(input_image, human_model)
@@ -168,7 +155,6 @@ def main():
             print(e)
             continue
 
-
         kps_b = np.concatenate((preds, maxvals), 2)
         box_b = bboxs[:preds.shape[0]]
 
@@ -192,9 +178,6 @@ def main():
 
             for pos, num in enumerate(cur_ids):
                 cur_maps[num] = previous_ids[prev_filter_ids[pos]]
-
-            #  for k in range(len(cur_ids)):
-                #  cur_maps[k] = previous_ids[prev_filter_ids[k]]
 
             prev_max_id = max(max(previous_ids), prev_max_id)
 

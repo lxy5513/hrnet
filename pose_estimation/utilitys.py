@@ -146,6 +146,7 @@ def PreProcess(image, bboxs, scores, cfg, thred_score=0.6):
 
     if type(image) == str:
         data_numpy = cv2.imread(image, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+
     else:
         data_numpy = image
 

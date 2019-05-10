@@ -1,5 +1,5 @@
 '''
-使用yolov3作为pose net模型的前处理
+使用mmdetection作为pose net模型的人体检测器
 '''
 from __future__ import absolute_import
 from __future__ import division
@@ -131,12 +131,14 @@ def main():
 
 
     ########## 加载human detecotor model
-    from lib.detector.yolo.human_detector import load_model as yolo_model
-    human_model = yolo_model()
 
-    from lib.detector.yolo.human_detector import human_bbox_get as yolo_det
-    bboxs, scores = yolo_det(args.img_input, human_model, confidence=0.5) # bboxes (N, 4) [x0, y0, x1, y1]
-    pdb()
+
+
+    from lib.detector.mmdetction.high_api import load_model
+    human_model = load_model()
+    from lib.detector.mmdetction.high_api import human_boxes_get as mmd_detector
+    bboxs, scores = mmd_detector(human_model, args.img_input) # bboxes (N, 4) [x0, y0, x1, y1]
+
 
     # bbox is coordinate location
     inputs, origin_img, center, scale = PreProcess(args.img_input, bboxs, scores, cfg)
