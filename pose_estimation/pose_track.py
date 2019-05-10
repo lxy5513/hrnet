@@ -1,5 +1,6 @@
 '''
-使用yolov3作为pose net模型的前处理
+SIMPLE POSE TRACKING
+use boxes similarity as OKS similarity for pose tracking
 '''
 from __future__ import absolute_import
 from __future__ import division
@@ -11,9 +12,9 @@ import pprint
 import ipdb;pdb=ipdb.set_trace
 import numpy as np
 from tqdm import tqdm
-from utilitys import plot_keypoint, PreProcess, plot_keypoint_track
-import time
+from pose_utils import plot_keypoint, PreProcess, plot_keypoint_track, bipartite_matching_greedy, compute_pairwise_oks, boxes_similarity
 
+import time
 import torch
 import _init_paths
 from config import cfg
@@ -25,8 +26,6 @@ from lib.core.inference import get_final_preds
 import cv2
 import models
 from lib.detector.yolo.human_detector import human_bbox_get as yolo_det
-from track_u import bipartite_matching_greedy, compute_pairwise_oks, boxes_similarity
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train keypoints network')
@@ -34,8 +33,6 @@ def parse_args():
     parser.add_argument('--cfg',
                         help='experiment configure file name',
                         default='experiments/coco/hrnet/w32_256x192_adam_lr1e-3.yaml',
-                        #  default='experiments/coco/hrnet/w48_256x192_adam_lr1e-3.yaml',
-                        #  default='experiments/coco/hrnet/w32_384x288_adam_lr1e-3.yaml',
                         type=str)
 
     parser.add_argument('opts',
@@ -71,7 +68,6 @@ def parse_args():
     return args
 
 
-
 ##### load model
 def model_load(config):
     model = eval('models.'+config.MODEL.NAME+'.get_pose_net')(
@@ -83,7 +79,6 @@ def model_load(config):
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
         name = k # remove module.
-        #  print(name,'\t')
         new_state_dict[name] = v
     model.load_state_dict(new_state_dict)
     model.eval()
@@ -131,7 +126,7 @@ def main():
         ret_val, input_image = cam.read()
         item = 0
         try:
-            bboxs, scores = yolo_det(input_image, human_model)
+            bboxs, scores = yolo_det(input_image, human_model, 1, 0.9)
             # bbox is coordinate location
             inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
         except Exception as e:
@@ -199,7 +194,6 @@ def main():
             image = plot_keypoint_track(origin_img, preds, maxvals, box_a, previous_ids, 0.1)
             out.write(image)
         if args.display and i>0:
-            ########### 指定屏幕大小
             winname = 'image'
             cv2.namedWindow(winname)        # Create a named window
             cv2.moveWindow(winname, 1000,850)  # Move it to (40,30)
