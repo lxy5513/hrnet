@@ -4,6 +4,7 @@
 out
 gen
 *.json
+model_server/
 
 
 *.mp4
