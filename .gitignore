@@ -4,7 +4,7 @@
 out
 gen
 *.json
-model_server/
+# model_server/
 
 
 *.mp4
@@ -99,3 +99,9 @@ draws/
 plot/
 *.tar
 
+*.pyc
+.torch
+_ext
+*.o
+work
+work/*
