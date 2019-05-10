@@ -1,5 +1,4 @@
 '''
-使用yolov3作为pose net模型的前处理
 '''
 from __future__ import absolute_import
 from __future__ import division

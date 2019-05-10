@@ -11,7 +11,7 @@ import pprint
 import ipdb;pdb=ipdb.set_trace
 import numpy as np
 from tqdm import tqdm
-from utilitys import plot_keypoint, PreProcess
+from pose_utils import plot_keypoint, PreProcess
 
 import torch
 import torch.nn.parallel
