@@ -330,8 +330,6 @@ class COCODataset(JointsDataset):
         for kpt in _kpts:
             kpts[kpt['image']].append(kpt)
 
-        # 处理之前 box的数量
-
 
         # rescoring and oks nms
         num_joints = self.num_joints
