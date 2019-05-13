@@ -1,3 +1,4 @@
+
 ## DEMO
 ```
 python pose_estimation/video.py
@@ -7,6 +8,23 @@ python pose_estimation/video.py
 --camera # 通过网络摄像头作为视频的输入(open web camera by video input)
 
 ```
+
+
+## ENV CONFIGURE 
+```
+conda env create -f env_info_file.yml 
+cd lib && make
+```
+
+## Model Download 
+pose model(pose_hrnet_w48_256x192.pth) address: https://drive.google.com/drive/folders/1nzM_OBV9LbAEA7HClC0chEyf_7ECDXYA)   
+>save in $hrnet/models/pytorch/pose_coco/pose_hrnet_w48_256x192.pth   
+
+
+yolov3 model download: wget https://pjreddie.com/media/files/yolov3.weights
+>save in $hrnet/lib/detector/yolo/yolov3.weights
+
+
 
 
 ## UPDATE 2019-05-21
