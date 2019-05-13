@@ -8,6 +8,10 @@ model_server/
 
 
 *.mp4
+det/
+*.jpg 
+*.png
+*.weights
 
 ### Vim template
 [._]*.s[a-w][a-z]
