@@ -127,7 +127,6 @@ def main():
         item = 0
         try:
             bboxs, scores = yolo_det(input_image, human_model, 1, 0.9)
-            # bbox is coordinate location
             inputs, origin_img, center, scale = PreProcess(input_image, bboxs, scores, cfg)
         except Exception as e:
             print(e)
