@@ -9,12 +9,15 @@ python pose_estimation/video.py
 
 ```
 
+<br>
 
 ## ENV CONFIGURE 
 ```
 conda env create -f env_info_file.yml 
 cd lib && make
 ```
+
+<br> 
 
 ## Model Download 
 pose model(pose_hrnet_w48_256x192.pth) address: https://drive.google.com/drive/folders/1nzM_OBV9LbAEA7HClC0chEyf_7ECDXYA)   
@@ -25,7 +28,7 @@ yolov3 model download: wget https://pjreddie.com/media/files/yolov3.weights
 >save in $hrnet/lib/detector/yolo/yolov3.weights
 
 
-
+<br>
 
 ## UPDATE 2019-05-21
 add high mAP mmdetection
