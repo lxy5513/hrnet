@@ -1,4 +1,5 @@
 torch==1.0.1 -f https://download.pytorch.org/whl/cu100/stable 
+torchvision==0.2.2.post3
 EasyDict==1.7
 opencv-python
 shapely==1.6.4
