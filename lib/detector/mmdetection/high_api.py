@@ -1,6 +1,8 @@
-import sys
-main_path = '/home/xyliu/experiments/Detection/mmdetection'
+import sys 
+import os
+main_path = os.path.dirname(os.path.abspath(__file__)) + '/mmd'
 sys.path.insert(0, main_path)
+import ipdb;ipdb.set_trace()
 import mmcv
 from mmcv.runner import load_checkpoint
 from mmdet.models import build_detector
@@ -36,7 +38,6 @@ def human_boxes_get(model, img, score_thr=0.5):
 if __name__ == '__main__':
     imgs = [main_path + '/demo/test2.jpg', main_path + '/demo/test1.jpg']
     model = load_model()
-    import ipdb;ipdb.set_trace()
     for i, result in enumerate(inference_detector(model, imgs, cfg, device='cuda:0')):
         print(i, imgs[i])
         bboxes, scores = re_result(result)

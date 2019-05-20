@@ -129,23 +129,17 @@ def main():
     torch.backends.cudnn.deterministic = cfg.CUDNN.DETERMINISTIC
     torch.backends.cudnn.enabled = cfg.CUDNN.ENABLED
 
-
     ########## 加载human detecotor model
-
-
-
-    from lib.detector.mmdetction.high_api import load_model
+    pdb()
+    from lib.detector.mmdetection.high_api import load_model
     human_model = load_model()
-    from lib.detector.mmdetction.high_api import human_boxes_get as mmd_detector
+    from lib.detector.mmdetection.high_api import human_boxes_get as mmd_detector
     bboxs, scores = mmd_detector(human_model, args.img_input) # bboxes (N, 4) [x0, y0, x1, y1]
-
-
     # bbox is coordinate location
     inputs, origin_img, center, scale = PreProcess(args.img_input, bboxs, scores, cfg)
 
-    # load MODEL
+    # load HRNET MODEL
     model = model_load(cfg)
-
     with torch.no_grad():
         # compute output heatmap
         #  inputs = inputs[:,[2,1,0]]
