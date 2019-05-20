@@ -1,3 +1,4 @@
+torch==1.0.1 -f https://download.pytorch.org/whl/cu100/stable 
 EasyDict==1.7
 opencv-python
 shapely==1.6.4
@@ -8,4 +9,5 @@ pyyaml
 json_tricks
 scikit-image
 yacs>=0.1.5
-tensorboardX>=1.6
+tqdm 
+ipdb
