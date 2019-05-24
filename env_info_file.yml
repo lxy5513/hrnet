@@ -1,4 +1,4 @@
-name: hrnet
+name: hrnet_tmp
 channels:
   - defaults
 dependencies:
@@ -65,5 +65,5 @@ dependencies:
     - pyyaml==5.1
     - tqdm==4.31.1
     - yacs==0.1.6
-prefix: /home/xyliu/miniconda3/envs/hrnet
+prefix: /home/xyliu/miniconda3/envs/hrnet_tmp
 
