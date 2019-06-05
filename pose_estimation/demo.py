@@ -136,7 +136,6 @@ def main():
 
     from lib.detector.yolo.human_detector import human_bbox_get as yolo_det
     bboxs, scores = yolo_det(args.img_input, human_model, confidence=0.5) # bboxes (N, 4) [x0, y0, x1, y1]
-    pdb()
 
     # bbox is coordinate location
     inputs, origin_img, center, scale = PreProcess(args.img_input, bboxs, scores, cfg)

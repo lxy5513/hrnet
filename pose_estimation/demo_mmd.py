@@ -130,7 +130,6 @@ def main():
     torch.backends.cudnn.enabled = cfg.CUDNN.ENABLED
 
     ########## 加载human detecotor model
-    pdb()
     from lib.detector.mmdetection.high_api import load_model
     human_model = load_model()
     from lib.detector.mmdetection.high_api import human_boxes_get as mmd_detector
